@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lukeflix V19 - Drive Fix</title>
+    <title>Lukeflix V20 - Player Real</title>
     <style>
         :root { --primary: #ffcc00; --bg: #0a0a0a; --card: #161616; --text: #ffffff; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; }
@@ -30,10 +30,8 @@
         input, textarea, select { width: 100%; padding: 10px; margin: 5px 0; background: #000; border: 1px solid #333; color: white; border-radius: 5px; box-sizing: border-box; }
         .player-container { max-width: 1000px; margin: 0 auto; text-align: center; }
         .video-box { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 10px; border: 1px solid var(--primary); overflow: hidden; }
-        iframe, video { width: 100%; height: 100%; border: none; }
-        .ep-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 15px; }
-        .ep-btn { background: #222; color: white; border: 1px solid #444; padding: 10px 15px; cursor: pointer; border-radius: 5px; }
-        .ep-btn:hover { background: var(--primary); color: #000; }
+        
+        video, iframe { width: 100%; height: 100%; border: none; display: block; }
     </style>
 </head>
 <body>
@@ -58,15 +56,15 @@
 
 <div id="upload-view" class="view">
     <div class="form-box">
-        <h2 style="color:var(--primary); text-align:center; margin:0;">UPLOAD CLOUD</h2>
+        <h2 style="color:var(--primary); text-align:center; margin:0;">UPLOAD ADMIN</h2>
         <label>Tipo</label>
         <select id="typeSelect"><option value="filmes">Filme</option><option value="series">Série</option><option value="animes">Anime</option></select>
         <input type="text" id="title" placeholder="Título">
         <textarea id="desc" placeholder="Sinopse..." rows="2"></textarea>
         <label>Link da Capa (URL)</label>
         <input type="text" id="coverUrl" placeholder="https://site.com/foto.jpg">
-        <label>Links dos Vídeos (Use o formato /preview do Drive)</label>
-        <textarea id="videoLinks" placeholder="Um link por linha..." rows="5"></textarea>
+        <label>Links dos Vídeos (Cole o link de compartilhamento do Drive)</label>
+        <textarea id="videoLinks" placeholder="Um link por linha...&#10;Ex: https://drive.google.com/file/d/1ABC.../view" rows="5"></textarea>
         <button class="btn" style="width:100%; margin-top:15px;" onclick="save()">PUBLICAR NO SITE</button>
         <button class="btn" style="width:100%; background:#222; color:white; margin-top:10px;" onclick="changeTab(currentCat)">CANCELAR</button>
     </div>
@@ -89,7 +87,9 @@
     let isAdmin = false;
     const MASTER_PASS = "Angola-zango-icolebengo-1234-14-gg-jj-jjk-jjs-itamar-sario";
 
-    function stopVideo() { document.getElementById('video-wrapper').innerHTML = ""; }
+    function stopVideo() { 
+        document.getElementById('video-wrapper').innerHTML = ""; 
+    }
 
     function loginAdmin() {
         if(prompt("Chave Mestre:") === MASTER_PASS) {
@@ -105,7 +105,7 @@
         currentCat = cat;
         document.querySelectorAll('nav span').forEach(s => s.classList.remove('active'));
         document.getElementById('tab-' + cat).classList.add('active');
-        document.getElementById('view-title').innerText = cat;
+        document.getElementById('view-title').innerText = cat.toUpperCase();
         showView('gallery-view');
         render();
     }
@@ -118,12 +118,22 @@
 
     function save() {
         if(!isAdmin) return;
-        const title = document.getElementById('title').value;
-        const cover = document.getElementById('coverUrl').value;
-        const links = document.getElementById('videoLinks').value.split('\n').filter(l => l.trim() !== "");
-        if(!title || !cover || links.length === 0) return alert("Preencha tudo!");
+        const title = document.getElementById('title').value.trim();
+        const cover = document.getElementById('coverUrl').value.trim();
+        const links = document.getElementById('videoLinks').value.split('\n').map(l => l.trim()).filter(l => l !== "");
+        
+        if(!title || !cover || links.length === 0) {
+            return alert("Preencha o título, capa e pelo menos um link de vídeo!");
+        }
 
-        const item = { id: Date.now(), title, desc: document.getElementById('desc').value, cover, videos: links };
+        const item = { 
+            id: Date.now(), 
+            title, 
+            desc: document.getElementById('desc').value.trim(), 
+            cover, 
+            videos: links 
+        };
+        
         db[document.getElementById('typeSelect').value].push(item);
         localStorage.setItem('lukeflix_db', JSON.stringify(db));
         changeTab(document.getElementById('typeSelect').value);
@@ -141,46 +151,87 @@
         });
     }
 
+    // === FUNÇÃO CORRIGIDA - PRINCIPAL SOLUÇÃO PARA TELA PRETA NO DRIVE ===
+    function playLink(url) {
+        url = url.trim();
+        const wrapper = document.getElementById('video-wrapper');
+        wrapper.innerHTML = '';
+
+        // GOOGLE DRIVE - Melhor método atual
+        if (url.includes('drive.google.com')) {
+            let driveId = null;
+            const match1 = url.match(/\/d\/([^\/]+)/);
+            const match2 = url.match(/id=([^\&]+)/);
+            const match3 = url.match(/\/file\/d\/([^\/]+)/);
+
+            if (match1) driveId = match1[1];
+            else if (match2) driveId = match2[1];
+            else if (match3) driveId = match3[1];
+
+            if (driveId) {
+                const previewUrl = `https://drive.google.com/file/d/${driveId}/preview`;
+                wrapper.innerHTML = `
+                    <iframe src="${previewUrl}" 
+                            allow="autoplay" 
+                            allowfullscreen>
+                    </iframe>`;
+                return;
+            }
+        } 
+        // YOUTUBE
+        else if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            let id = '';
+            if (url.includes('v=')) {
+                id = url.split('v=')[1].split('&')[0];
+            } else {
+                id = url.split('/').pop().split('?')[0];
+            }
+            wrapper.innerHTML = `
+                <iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0" 
+                        allowfullscreen>
+                </iframe>`;
+            return;
+        } 
+        // OUTROS LINKS DIRETOS
+        else {
+            wrapper.innerHTML = `
+                <video controls autoplay style="width:100%; height:100%;">
+                    <source src="${url}" type="video/mp4">
+                    Seu navegador não suporta este vídeo.
+                </video>`;
+        }
+    }
+
     function openPlayer(item) {
         showView('player-view');
         document.getElementById('p-title').innerText = item.title;
-        document.getElementById('p-desc').innerText = item.desc;
-        const wrapper = document.getElementById('video-wrapper');
+        document.getElementById('p-desc').innerText = item.desc || "Sem descrição";
+
         const epContainer = document.getElementById('ep-container');
         epContainer.innerHTML = '';
 
-        const playLink = (url) => {
-            url = url.trim();
-            // Se for link do Drive, usa o Iframe (Independente se termina em /view ou /preview)
-            if (url.includes('drive.google.com')) {
-                let driveUrl = url.replace('/view', '/preview').replace('usp=drive_link', '');
-                wrapper.innerHTML = `<iframe src="${driveUrl}" allow="autoplay" allowfullscreen></iframe>`;
-            } 
-            else if (url.includes('youtube.com') || url.includes('youtu.be')) {
-                const id = url.includes('v=') ? url.split('v=')[1].split('&')[0] : url.split('/').pop();
-                wrapper.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1" allowfullscreen></iframe>`;
-            } else {
-                wrapper.innerHTML = `<video src="${url}" controls autoplay></video>`;
-            }
-        };
-
-        if(item.videos.length > 1) {
+        if (item.videos && item.videos.length > 1) {
             item.videos.forEach((l, i) => {
                 const b = document.createElement('button');
                 b.className = 'ep-btn';
-                b.innerText = "EP " + (i+1);
+                b.innerText = `EP ${i+1}`;
                 b.onclick = () => playLink(l);
                 epContainer.appendChild(b);
             });
         }
-        playLink(item.videos[0]);
 
+        // Reproduz o primeiro vídeo automaticamente
+        if (item.videos && item.videos.length > 0) {
+            playLink(item.videos[0]);
+        }
+
+        // Botão de eliminar (admin)
         const delBtn = document.getElementById('delBtn');
         const newDelBtn = delBtn.cloneNode(true);
         delBtn.parentNode.replaceChild(newDelBtn, delBtn);
         if(isAdmin) newDelBtn.style.display = 'block';
         newDelBtn.onclick = () => {
-            if(confirm("Eliminar?")) {
+            if(confirm("Eliminar este conteúdo?")) {
                 db[currentCat] = db[currentCat].filter(obj => obj.id !== item.id);
                 localStorage.setItem('lukeflix_db', JSON.stringify(db));
                 changeTab(currentCat);
@@ -189,9 +240,12 @@
     }
 
     function search() {
-        const q = document.getElementById('searchInput').value.toLowerCase();
-        render(db[currentCat].filter(i => i.title.toLowerCase().includes(q)));
+        const q = document.getElementById('searchInput').value.toLowerCase().trim();
+        const filtered = db[currentCat].filter(i => i.title.toLowerCase().includes(q));
+        render(filtered);
     }
+
+    // Inicializa a página
     render();
 </script>
 </body>
